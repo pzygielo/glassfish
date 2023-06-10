@@ -2085,7 +2085,7 @@
 <!-- org.glassfish.main.ejb:ejb&#45;timer&#45;service&#45;app -->
 <g id="node161" class="node">
 <title>org.glassfish.main.ejb:ejb&#45;timer&#45;service&#45;app</title>
-<polygon fill="wheat" stroke="black" points="1076.5,-7812 969.5,-7812 969.5,-7776 1076.5,-7776 1076.5,-7812"/>
+<polygon fill="lightblue" stroke="black" points="1076.5,-7812 969.5,-7812 969.5,-7776 1076.5,-7776 1076.5,-7812"/>
 <text text-anchor="middle" x="1023" y="-7796.6" font-family="Helvetica,sans-Serif" font-size="8.00">ejb&#45;timer&#45;service&#45;app</text>
 <text text-anchor="middle" x="1023" y="-7787.6" font-family="Helvetica,sans-Serif" font-size="8.00">org.glassfish.main.ejb</text>
 </g>
@@ -2943,7 +2943,7 @@
 <!-- org.glassfish.main.admingui:war -->
 <g id="node227" class="node">
 <title>org.glassfish.main.admingui:war</title>
-<polygon fill="wheat" stroke="black" points="854,-1440 722,-1440 722,-1404 854,-1404 854,-1440"/>
+<polygon fill="lightblue" stroke="black" points="854,-1440 722,-1440 722,-1404 854,-1404 854,-1440"/>
 <text text-anchor="middle" x="788" y="-1424.6" font-family="Helvetica,sans-Serif" font-size="8.00">war</text>
 <text text-anchor="middle" x="788" y="-1415.6" font-family="Helvetica,sans-Serif" font-size="8.00">org.glassfish.main.admingui</text>
 </g>
