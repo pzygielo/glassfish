@@ -14,7 +14,7 @@ Installation Guide
 
 Release {product-majorVersion}
 
-Contributed 2018 - 2024
+Contributed 2018 - 2026
 
 This book contains instructions for installing and uninstalling
 {productName} software.
