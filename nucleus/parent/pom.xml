@@ -117,6 +117,9 @@
         <hk2.version>4.0.0-M3</hk2.version>
         <hk2.plugin.version>4.0.0-M3</hk2.plugin.version>
 
+        <!-- Jakarta CDI -->
+        <jakarta.cdi-api.version>4.1.0</jakarta.cdi-api.version>
+
         <!-- Jakarta XML Binding -->
         <jakarta.xml.bind-api.version>4.0.4</jakarta.xml.bind-api.version>
         <jakarta.jaxb-impl.version>4.0.6</jakarta.jaxb-impl.version>
