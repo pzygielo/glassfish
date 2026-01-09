@@ -57,11 +57,11 @@ import org.glassfish.api.security.jwt.MicroProfileJwtAuthenticationMechanism;
 
 @ApplicationScoped
 public class SecurityService {
-    
+
     @Inject
     @MicroProfileJwtAuthenticationMechanism
     private HttpAuthenticationMechanism jwtAuthMechanism;
-    
+
     // Use the JWT authentication mechanism directly
 }
 ```
