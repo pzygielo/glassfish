@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2022, 2024 Contributors to Eclipse Foundation.
- * Copyright (c) 2018, 2021 Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2025 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +16,38 @@
 
 package io.helidon.microprofile.config;
 
+import java.lang.System.Logger.Level;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Member;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
+import java.util.Set;
+import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
 import io.helidon.common.NativeImageHelper;
 import io.helidon.config.ConfigException;
 import io.helidon.config.mp.MpConfig;
 
-import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Vetoed;
 import jakarta.enterprise.inject.spi.AfterBeanDiscovery;
 import jakarta.enterprise.inject.spi.AfterDeploymentValidation;
 import jakarta.enterprise.inject.spi.Annotated;
@@ -40,50 +62,21 @@ import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
 import jakarta.enterprise.inject.spi.ProcessBean;
 import jakarta.enterprise.inject.spi.ProcessObserverMethod;
-import jakarta.enterprise.inject.spi.ProcessSyntheticObserverMethod;
 import jakarta.enterprise.inject.spi.WithAnnotations;
-import jakarta.interceptor.Interceptor;
-
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Member;
-import java.lang.reflect.Method;
-import java.lang.reflect.Type;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.OptionalDouble;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
-import java.util.Set;
-import java.util.function.Supplier;
-import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
+import jakarta.inject.Provider;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.ConfigValue;
 import org.eclipse.microprofile.config.inject.ConfigProperties;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.config.spi.Converter;
-import org.glassfish.microprofile.config.ApplicationContext;
-
-import static java.util.Optional.ofNullable;
 
 /**
- * Must be in the {@link io.helidon.microprofile.config} package because it depends on package private Helidon classes.
  * Extension to enable config injection in CDI container (all of {@link io.helidon.config.Config},
- * {@link org.eclipse.microprofile.config.Config} and {@link ConfigProperty}).
+ * {@link org.eclipse.microprofile.config.Config} and {@link ConfigProperty} and {@link ConfigProperties}).
  */
 public class ConfigCdiExtension implements Extension {
-    private static final Logger LOGGER = Logger.getLogger(ConfigCdiExtension.class.getName());
+    private static final System.Logger LOGGER = System.getLogger(ConfigCdiExtension.class.getName());
     private static final Pattern SPLIT_PATTERN = Pattern.compile("(?<!\\\\),");
     private static final Pattern ESCAPED_COMMA_PATTERN = Pattern.compile("\\,", Pattern.LITERAL);
     private static final Annotation CONFIG_PROPERTY_LITERAL = new ConfigPropertyLiteral();
@@ -110,7 +103,7 @@ public class ConfigCdiExtension implements Extension {
      * Constructor invoked by CDI container.
      */
     public ConfigCdiExtension() {
-        LOGGER.fine("ConfigCdiExtension instantiated");
+        LOGGER.log(Level.DEBUG, "ConfigCdiExtension instantiated");
     }
 
     private void harvestConfigPropertyInjectionPointsFromEnabledBean(@Observes ProcessBean<?> event) {
@@ -135,46 +128,52 @@ public class ConfigCdiExtension implements Extension {
         AnnotatedType<?> annotatedType = event.getAnnotatedType();
         ConfigProperties configProperties = annotatedType.getAnnotation(ConfigProperties.class);
         if (configProperties == null) {
-            // Ignore classes that do not have this annotation on class level
+            // ignore classes that do not have this annotation on class level
             return;
         }
-
         configBeans.put(annotatedType.getJavaClass(), ConfigBeanDescriptor.create(annotatedType, configProperties));
-
-        // We must veto this annotated type, as we need to create a custom bean to create an instance
+        // we must veto this annotated type, as we need to create a custom bean to create an instance
         event.veto();
     }
 
     private <X> void harvestConfigPropertyInjectionPointsFromEnabledObserverMethod(@Observes ProcessObserverMethod<?, X> event,
                                                                                    BeanManager beanManager) {
-        // Synthetic events won't have an annotated method
-        if (event instanceof ProcessSyntheticObserverMethod) {
-            return;
+        AnnotatedMethod<X> annotatedMethod = event.getAnnotatedMethod();
+        if (annotatedMethod != null && !annotatedMethod.getDeclaringType().isAnnotationPresent(Vetoed.class)) {
+            List<AnnotatedParameter<X>> annotatedParameters = annotatedMethod.getParameters();
+            if (annotatedParameters != null) {
+                for (AnnotatedParameter<?> annotatedParameter : annotatedParameters) {
+                    if ((annotatedParameter != null)
+                            && !annotatedParameter.isAnnotationPresent(Observes.class)) {
+                        InjectionPoint injectionPoint = beanManager.createInjectionPoint(annotatedParameter);
+                        Set<Annotation> qualifiers = injectionPoint.getQualifiers();
+                        assert qualifiers != null;
+                        for (Annotation qualifier : qualifiers) {
+                            if (qualifier instanceof ConfigProperty) {
+                                ips.add(injectionPoint);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
-
-        ofNullable(event.getAnnotatedMethod())
-                .map(AnnotatedMethod::getParameters)
-                .stream().flatMap(Collection::stream)
-                .filter(parameter -> !parameter.isAnnotationPresent(Observes.class)
-                                && parameter.isAnnotationPresent(ConfigProperty.class))
-                .map(beanManager::createInjectionPoint)
-                .forEach(ips::add);
     }
 
     /**
      * Register a config producer bean for each {@link org.eclipse.microprofile.config.inject.ConfigProperty} injection.
      *
-     * @param afterBeanDiscovery event from CDI container
+     * @param abd event from CDI container
      */
-    private void registerConfigProducer(@Observes AfterBeanDiscovery afterBeanDiscovery) {
+    private void registerConfigProducer(@Observes AfterBeanDiscovery abd) {
         // we also must support injection of Config itself
-        afterBeanDiscovery.addBean()
+        abd.addBean()
                 .addTransitiveTypeClosure(org.eclipse.microprofile.config.Config.class)
                 .beanClass(org.eclipse.microprofile.config.Config.class)
                 .scope(ApplicationScoped.class)
                 .createWith(creationalContext -> new SerializableConfig());
 
-        afterBeanDiscovery.addBean()
+        abd.addBean()
                 .addTransitiveTypeClosure(io.helidon.config.Config.class)
                 .beanClass(io.helidon.config.Config.class)
                 .scope(ApplicationScoped.class)
@@ -190,25 +189,27 @@ public class ConfigCdiExtension implements Extension {
         Set<Type> types = ips.stream()
                 .map(InjectionPoint::getType)
                 .map(it -> {
-                    if (it instanceof Class) {
-                        Class<?> clazz = (Class<?>) it;
-                        if (clazz.isPrimitive()) {
-                            return REPLACED_TYPES.getOrDefault(clazz, clazz);
-                        }
+                    if (it instanceof Class clazz && clazz.isPrimitive()) {
+                        return REPLACED_TYPES.getOrDefault(clazz, clazz);
+                    } else if (it instanceof ParameterizedType p && Provider.class.isAssignableFrom((Class<?>) p.getRawType())) {
+                        // The CDI implementation itself implements jakarta.inject.Provider<X> for all X and
+                        // jakarta.enterprise.inject.Instance<X> for all X (a Provider<X> subtype); other beans must
+                        // not
+                        return p.getActualTypeArguments()[0];
                     }
                     return it;
                 })
                 .collect(Collectors.toSet());
 
         types.forEach(type -> {
-            afterBeanDiscovery.addBean()
+            abd.addBean()
                     .addType(type)
                     .scope(Dependent.class)
                     .addQualifier(CONFIG_PROPERTY_LITERAL)
                     .produceWith(it -> produce(it.select(InjectionPoint.class).get()));
         });
 
-        configBeans.values().forEach(beanDescriptor -> afterBeanDiscovery.addBean()
+        configBeans.values().forEach(beanDescriptor -> abd.addBean()
                 .addType(beanDescriptor.type())
                 .addTransitiveTypeClosure(beanDescriptor.type())
                 // it is non-binding
@@ -217,15 +218,6 @@ public class ConfigCdiExtension implements Extension {
                 .produceWith(it -> beanDescriptor.produce(it.select(InjectionPoint.class).get(), ConfigProvider.getConfig())));
     }
 
-    /**
-     * Register a config producer bean for each {@link org.eclipse.microprofile.config.inject.ConfigProperty} injection.
-     *
-     * @param afterBeanDiscovery event from CDI container
-     */
-    private void defineApplicationContextBean(@Observes @Priority(Interceptor.Priority.LIBRARY_BEFORE) AfterBeanDiscovery afterBeanDiscovery, BeanManager beanManager) {
-        afterBeanDiscovery.addBean()
-                .read(beanManager.createAnnotatedType(ApplicationContext.class));
-    }
     /**
      * Validate all injection points are valid.
      *
@@ -260,13 +252,22 @@ public class ConfigCdiExtension implements Extension {
             // this is build-time of native-image - e.g. run from command line or maven
             // logging may not be working/configured to deliver this message as it should
             System.err.println("You are accessing configuration key '" + configKey + "' during"
-                    + " container initialization. This will not work nicely with Graal native-image");
+                                       + " container initialization. This will not work nicely with Graal native-image");
         }
 
-        return produce(configKey, ip.getType(), defaultValue(annotation));
+        return produce(configKey, ip, defaultValue(annotation), configKey.equals(fullPath.replace('$', '.')));
     }
 
-    private Object produce(String configKey, Type type, String defaultValue) {
+    /*
+     * Produce configuration value from injection point.
+     *
+     * @param configKey actual configuration key to find
+     * @param ip the injection point
+     * @param defaultValue default value to be used
+     * @param defaultConfigKey whether the configKey is constructed from class name and field
+     * @return produced value to be injected
+     */
+    private Object produce(String configKey, InjectionPoint ip, String defaultValue, boolean defaultConfigKey) {
         /*
              Supported types
              group x:
@@ -277,13 +278,19 @@ public class ConfigCdiExtension implements Extension {
                 x[] - where x is one of the above
 
              group z:
-                Provider<y>
                 Optional<y>
                 Supplier<y>
 
              group z':
                 Map<String, String> - a detached key/value mapping of whole subtree
              */
+        Type type = ip.getType();
+        if (type instanceof ParameterizedType pt && Provider.class.isAssignableFrom((Class<?>) pt.getRawType())) {
+            // The CDI implementation itself implements jakarta.inject.Provider<X> for all X and
+            // jakarta.enterprise.inject.Instance<X> for all X (a Provider<X> subtype); other beans must
+            // not
+            type = pt.getActualTypeArguments()[0];
+        }
         FieldTypes fieldTypes = FieldTypes.create(type);
         org.eclipse.microprofile.config.Config config = ConfigProvider.getConfig();
 
@@ -302,7 +309,7 @@ public class ConfigCdiExtension implements Extension {
             }
         }
 
-        Object value = configValue(config, fieldTypes, configKey, defaultValue);
+        Object value = configValue(config, fieldTypes, configKey, defaultValue, defaultConfigKey);
 
         if (value == null) {
             throw new NoSuchElementException("Cannot find value for key: " + configKey);
@@ -310,7 +317,11 @@ public class ConfigCdiExtension implements Extension {
         return value;
     }
 
-    private Object configValue(Config config, FieldTypes fieldTypes, String configKey, String defaultValue) {
+    private Object configValue(Config config,
+                               FieldTypes fieldTypes,
+                               String configKey,
+                               String defaultValue,
+                               boolean defaultConfigKey) {
         Class<?> type0 = fieldTypes.field0().rawType();
         Class<?> type1 = fieldTypes.field1().rawType();
         Class<?> type2 = fieldTypes.field2().rawType();
@@ -321,11 +332,12 @@ public class ConfigCdiExtension implements Extension {
 
         // generic declaration
         return parameterizedConfigValue(config,
-                configKey,
-                defaultValue,
-                type0,
-                type1,
-                type2);
+                                        configKey,
+                                        defaultConfigKey,
+                                        defaultValue,
+                                        type0,
+                                        type1,
+                                        type2);
     }
 
     private static <T> T withDefault(Config config, String key, Class<T> type, String configuredDefault, boolean required) {
@@ -333,16 +345,16 @@ public class ConfigCdiExtension implements Extension {
         // our type may be one of the explicit optionals
         if (OptionalInt.class.equals(type)) {
             return type.cast(config.getOptionalValue(key, Integer.class)
-                    .map(OptionalInt::of)
-                    .orElseGet(OptionalInt::empty));
+                                     .map(OptionalInt::of)
+                                     .orElseGet(OptionalInt::empty));
         } else if (OptionalLong.class.equals(type)) {
             return type.cast(config.getOptionalValue(key, Long.class)
-                    .map(OptionalLong::of)
-                    .orElseGet(OptionalLong::empty));
+                                     .map(OptionalLong::of)
+                                     .orElseGet(OptionalLong::empty));
         } else if (OptionalDouble.class.equals(type)) {
             return type.cast(config.getOptionalValue(key, Double.class)
-                    .map(OptionalDouble::of)
-                    .orElseGet(OptionalDouble::empty));
+                                     .map(OptionalDouble::of)
+                                     .orElseGet(OptionalDouble::empty));
         }
 
         // If converter returns null, we should not resolve default value
@@ -377,29 +389,32 @@ public class ConfigCdiExtension implements Extension {
         }
 
         return config.getConverter(type)
-                .orElseThrow(() -> new IllegalArgumentException("Did not find converter for type "
-                        + type.getName()
-                        + ", for key "
-                        + key))
-                .convert(value);
+                    .orElseThrow(() -> new IllegalArgumentException("Did not find converter for type "
+                                                                            + type.getName()
+                                                                            + ", for key "
+                                                                            + key))
+                    .convert(value);
     }
 
     private static Object parameterizedConfigValue(Config config,
                                                    String configKey,
+                                                   boolean defaultConfigKey,
                                                    String defaultValue,
                                                    Class<?> rawType,
                                                    Class<?> typeArg,
                                                    Class<?> typeArg2) {
         if (Optional.class.isAssignableFrom(rawType)) {
             if (typeArg.equals(typeArg2)) {
-                return ofNullable(withDefault(config, configKey, typeArg, defaultValue, false));
+                return Optional.ofNullable(withDefault(config, configKey, typeArg, defaultValue, false));
             } else {
-                return ofNullable(parameterizedConfigValue(config,
-                                configKey,
-                                defaultValue,
-                                typeArg,
-                                typeArg2,
-                                typeArg2));
+                return Optional
+                        .ofNullable(parameterizedConfigValue(config,
+                                                             configKey,
+                                                             defaultConfigKey,
+                                                             defaultValue,
+                                                             typeArg,
+                                                             typeArg2,
+                                                             typeArg2));
             }
         } else if (List.class.isAssignableFrom(rawType)) {
             return asList(config, configKey, typeArg, defaultValue);
@@ -408,26 +423,44 @@ public class ConfigCdiExtension implements Extension {
                 return (Supplier<?>) () -> withDefault(config, configKey, typeArg, defaultValue, true);
             } else {
                 return (Supplier<?>) () -> parameterizedConfigValue(config,
-                        configKey,
-                        defaultValue,
-                        typeArg,
-                        typeArg2,
-                        typeArg2);
+                                                                    configKey,
+                                                                    defaultConfigKey,
+                                                                    defaultValue,
+                                                                    typeArg,
+                                                                    typeArg2,
+                                                                    typeArg2);
             }
         } else if (Map.class.isAssignableFrom(rawType)) {
+            // config key we have should serve as a prefix, and the properties should have it removed
+            // similar to what the original io.helidon.config.Config.get(configKey).detach()
             Map<String, String> result = new HashMap<>();
             config.getPropertyNames()
                     .forEach(name -> {
-                        // workaround for race condition (if key disappears from source after we call getPropertyNames
-                        config.getOptionalValue(name, String.class).ifPresent(value -> result.put(name, value));
+                        if (defaultConfigKey || name.startsWith(configKey)) {
+                            String key = removePrefix(configKey, defaultConfigKey, name);
+                            // workaround for race condition (if key disappears from source after we call getPropertyNames)
+                            config.getOptionalValue(name, String.class).ifPresent(value -> result.put(key, value));
+                        }
                     });
             return result;
         } else if (Set.class.isAssignableFrom(rawType)) {
             return new LinkedHashSet<>(asList(config, configKey, typeArg, defaultValue));
         } else {
             throw new IllegalArgumentException("Cannot create config property for " + rawType + "<" + typeArg + ">, key: "
-                    + configKey);
+                                                       + configKey);
         }
+    }
+
+    private static String removePrefix(String prefix, boolean defaultConfigKey, String key) {
+        if (defaultConfigKey) {
+            return key;
+        }
+
+        String intermediate = key.substring(prefix.length());
+        if (intermediate.startsWith(".")) {
+            return intermediate.substring(1);
+        }
+        return intermediate;
     }
 
     static String[] toArray(String stringValue) {
