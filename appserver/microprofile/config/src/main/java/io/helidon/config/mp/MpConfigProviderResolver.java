@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2026 Contributors to Eclipse Foundation.
  * Copyright (c) 2019, 2025 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +17,11 @@
 
 package io.helidon.config.mp;
 
+import io.helidon.common.GenericType;
+import io.helidon.config.ConfigValue;
+import io.helidon.config.MetaConfig;
+import io.helidon.config.spi.ConfigMapper;
+
 import java.lang.System.Logger.Level;
 import java.time.Instant;
 import java.util.IdentityHashMap;
@@ -30,12 +36,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
-
-import io.helidon.common.GenericType;
-import io.helidon.common.config.GlobalConfig;
-import io.helidon.config.ConfigValue;
-import io.helidon.config.MetaConfig;
-import io.helidon.config.spi.ConfigMapper;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
@@ -178,11 +178,6 @@ public class MpConfigProviderResolver extends ConfigProviderResolver {
 
         ConfigDelegate newConfig = new ConfigDelegate(config);
         CONFIGS.put(classLoader, newConfig);
-
-        if (classLoader == Thread.currentThread().getContextClassLoader()) {
-            // this should be the default class loader (we do not support classloader magic in Helidon)
-            GlobalConfig.config(() -> newConfig, true);
-        }
 
         return newConfig;
     }
