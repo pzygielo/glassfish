@@ -25,6 +25,7 @@ import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.glassfish.microprofile.config.util.LazyProperty;
 
 /**
+ * This resolver postpones retrieving the resolver when it's actually needed. And when we already have the correct application's threadContext classloader.
  *
  * @author Ondro Mihalyi
  */
