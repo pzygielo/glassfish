@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2018, 2025 Oracle and/or its affiliates.
+ * Copyright (c) 2022, 2026 Contributors to Eclipse Foundation.
+ * Copyright (c) 2018, 2021 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,29 +16,6 @@
  */
 
 package io.helidon.microprofile.config;
-
-import java.lang.System.Logger.Level;
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Member;
-import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.OptionalDouble;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
-import java.util.Set;
-import java.util.function.Supplier;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import io.helidon.common.NativeImageHelper;
 import io.helidon.config.ConfigException;
@@ -62,9 +40,11 @@ import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
 import jakarta.enterprise.inject.spi.ProcessBean;
 import jakarta.enterprise.inject.spi.ProcessObserverMethod;
+import jakarta.enterprise.inject.spi.ProcessSyntheticObserverMethod;
 import jakarta.enterprise.inject.spi.WithAnnotations;
 import jakarta.inject.Provider;
 import jakarta.interceptor.Interceptor;
+
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.ConfigValue;
@@ -72,7 +52,33 @@ import org.eclipse.microprofile.config.inject.ConfigProperties;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.config.spi.Converter;
 
+import java.lang.System.Logger.Level;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Member;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
+import java.util.Set;
+import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import org.glassfish.microprofile.config.ApplicationContext;
+
 /**
+ * Must be in the {@link io.helidon.microprofile.config} package because it depends on package private Helidon classes.
  * Extension to enable config injection in CDI container (all of {@link io.helidon.config.Config},
  * {@link org.eclipse.microprofile.config.Config} and {@link ConfigProperty} and {@link ConfigProperties}).
  */
@@ -129,16 +135,23 @@ public class ConfigCdiExtension implements Extension {
         AnnotatedType<?> annotatedType = event.getAnnotatedType();
         ConfigProperties configProperties = annotatedType.getAnnotation(ConfigProperties.class);
         if (configProperties == null) {
-            // ignore classes that do not have this annotation on class level
+            // Ignore classes that do not have this annotation on class level
             return;
         }
+
         configBeans.put(annotatedType.getJavaClass(), ConfigBeanDescriptor.create(annotatedType, configProperties));
-        // we must veto this annotated type, as we need to create a custom bean to create an instance
+
+        // We must veto this annotated type, as we need to create a custom bean to create an instance
         event.veto();
     }
 
     private <X> void harvestConfigPropertyInjectionPointsFromEnabledObserverMethod(@Observes ProcessObserverMethod<?, X> event,
                                                                                    BeanManager beanManager) {
+        // Synthetic events won't have an annotated method
+        if (event instanceof ProcessSyntheticObserverMethod) {
+            return;
+        }
+
         AnnotatedMethod<X> annotatedMethod = event.getAnnotatedMethod();
         if (annotatedMethod != null && !annotatedMethod.getDeclaringType().isAnnotationPresent(Vetoed.class)) {
             List<AnnotatedParameter<X>> annotatedParameters = annotatedMethod.getParameters();
@@ -164,11 +177,11 @@ public class ConfigCdiExtension implements Extension {
     /**
      * Register a config producer bean for each {@link org.eclipse.microprofile.config.inject.ConfigProperty} injection.
      *
-     * @param abd event from CDI container
+     * @param afterBeanDiscovery event from CDI container
      */
-    private void registerConfigProducer(@Observes @Priority(Interceptor.Priority.PLATFORM_BEFORE) AfterBeanDiscovery abd) {
+    private void registerConfigProducer(@Observes AfterBeanDiscovery afterBeanDiscovery) {
         // we also must support injection of Config itself
-        abd.addBean()
+        afterBeanDiscovery.addBean()
                 .addTransitiveTypeClosure(org.eclipse.microprofile.config.Config.class)
                 .beanClass(org.eclipse.microprofile.config.Config.class)
                 .scope(ApplicationScoped.class)
@@ -190,14 +203,14 @@ public class ConfigCdiExtension implements Extension {
                 .collect(Collectors.toSet());
 
         types.forEach(type -> {
-            abd.addBean()
+            afterBeanDiscovery.addBean()
                     .addType(type)
                     .scope(Dependent.class)
                     .addQualifier(CONFIG_PROPERTY_LITERAL)
                     .produceWith(it -> produce(it.select(InjectionPoint.class).get()));
         });
 
-        configBeans.values().forEach(beanDescriptor -> abd.addBean()
+        configBeans.values().forEach(beanDescriptor -> afterBeanDiscovery.addBean()
                 .addType(beanDescriptor.type())
                 .addTransitiveTypeClosure(beanDescriptor.type())
                 // it is non-binding
@@ -206,6 +219,15 @@ public class ConfigCdiExtension implements Extension {
                 .produceWith(it -> beanDescriptor.produce(it.select(InjectionPoint.class).get(), ConfigProvider.getConfig())));
     }
 
+    /**
+     * Register a config producer bean for each {@link org.eclipse.microprofile.config.inject.ConfigProperty} injection.
+     *
+     * @param afterBeanDiscovery event from CDI container
+     */
+    private void defineApplicationContextBean(@Observes @Priority(Interceptor.Priority.LIBRARY_BEFORE) AfterBeanDiscovery afterBeanDiscovery, BeanManager beanManager) {
+        afterBeanDiscovery.addBean()
+                .read(beanManager.createAnnotatedType(ApplicationContext.class));
+    }
     /**
      * Validate all injection points are valid.
      *
