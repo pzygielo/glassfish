@@ -50,6 +50,8 @@ view the most up-to-date product information.
 Key new features in {productName} {product-majorVersion} include:
 
 * Support for both https://jakarta.ee/specifications/persistence/[Jakarta Persistence] entities and https://jakarta.ee/specifications/nosql/[Jakarta NoSQL] entities in xref:application-development-guide.adoc#using-jakarta-data-repositories[Jakarta Data repositories]
+* xref:application-development-guide.adoc#microprofile-jwt-qualifier[@MicroProfileJwtAuthenticationMechanism CDI qualifier] for direct injection of the built-in MicroProfile JWT authentication mechanism (see xref:application-development-guide.adoc#microprofile-jwt-integration[MicroProfile JWT Integration])
+* Enhanced virtual threads support with Java 21+ for improved concurrency performance
 * Java 21+ minimum requirement with support up to JDK 25 (see xref:#required-jdk-versions[Required JDK Versions])
 * MicroProfile APIs expanded to Web Profile and Embedded GlassFish (since {productName} 7.1.0) (see xref:#microprofile-support[MicroProfile Standards Support])
 * Monitoring via JMX supported in Embedded {productName}
@@ -641,6 +643,16 @@ Table 1-4 Jakarta EE Standards Implementations in {productName} {product-current
 
 |https://jakarta.ee/specifications/platform/10/[Jakarta EE Specification]
 |{jakartaee}
+|X
+|X
+
+|https://jakarta.ee/specifications/data/[Jakarta Data]
+|{jakarta-data-api-version}
+|X
+|X
+
+|https://jakarta.ee/specifications/nosql/[Jakarta NoSQL]
+|{jakarta-nosql-api-version}
 |X
 |X
 
