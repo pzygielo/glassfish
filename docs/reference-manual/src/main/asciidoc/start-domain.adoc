@@ -72,7 +72,7 @@ asadmin-options::
 `--debug`::
 `-d`::
   Specifies whether the domain is started with
-  https://docs.oracle.com/en/java/javase/17/docs/specs/jpda/jpda.html[Java Platform Debugger Architecture (JPDA)]
+  https://docs.oracle.com/en/java/javase/21/docs/specs/jpda/jpda.html[Java Platform Debugger Architecture (JPDA)]
   debugging enabled. With debugging enabled extra exceptions can be printed.
   Possible values are as follows:
 
@@ -114,7 +114,7 @@ asadmin-options::
 `--suspend`::
 `-s`::
   Specifies whether the domain is started with
-  https://docs.oracle.com/en/java/javase/17/docs/specs/jpda/jpda.html[Java Platform Debugger Architecture (JPDA)]
+  https://docs.oracle.com/en/java/javase/21/docs/specs/jpda/jpda.html[Java Platform Debugger Architecture (JPDA)]
   debugging enabled and suspend the newly started VM before the main class loads.
   When a debugger connects, it can send a JDWP command to resume the suspended VM.
   With debugging enabled extra exceptions can be printed.
@@ -229,6 +229,6 @@ xref:list-domains.adoc#list-domains[`list-domains`(1)],
 xref:restart-domain.adoc#restart-domain[`restart-domain`(1)],
 xref:stop-domain.adoc#stop-domain[`stop-domain`(1)]
 
-https://docs.oracle.com/en/java/javase/17/docs/specs/jpda/jpda.html[Java Platform Debugger Architecture (JPDA)]
+https://docs.oracle.com/en/java/javase/21/docs/specs/jpda/jpda.html[Java Platform Debugger Architecture (JPDA)]
 
 
