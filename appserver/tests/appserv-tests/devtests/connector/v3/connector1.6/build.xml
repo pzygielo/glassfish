@@ -131,8 +131,6 @@
             <param name="user" value="guest"/>
         </antcall>
 
-        <antcall target="restore-default-security-permission"/>
-
         <antcall target="delete-password-alias">
             <param name="password.alias.name" value="ALIAS_TEST_PROPERTY"/>
         </antcall>
@@ -254,14 +252,4 @@
             <arg line="${map.name}"/>
         </exec>
     </target>
-
-    <target name="restore-default-security-permission">
-        <antcall target="stop-server"/>
-        <move description="restore server.policy file"
-              file="${admin.domain.dir}/${admin.domain}/config/server.policy.bkp"
-              tofile="${admin.domain.dir}/${admin.domain}/config/server.policy"/>
-        <echo message="restored original server.policy file"/>
-        <antcall target="start-server"/>
-    </target>
-
 </project>
